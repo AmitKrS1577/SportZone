@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Container, Table, Alert, Badge, Tabs, Tab, Button, Modal } from 'react-bootstrap';
 import axios from 'axios';
+import { useTheme } from '../context/ThemeContext';
 
 const UserBookings = () => {
   const [bookings, setBookings] = useState([]);
@@ -11,6 +12,7 @@ const UserBookings = () => {
   const [totalPages, setTotalPages] = useState(0);
 
   const user = JSON.parse(localStorage.getItem('user'));
+  const { theme } = useTheme();
 
   const fetchBookings = async (page = 0) => {
     if (!user) return;
@@ -82,8 +84,8 @@ const UserBookings = () => {
   const cancelledBookings = bookings.filter(b => b.status === 'CANCELLED');
 
   const BookingTable = ({ data, showCancel }) => (
-    <Table striped bordered hover responsive className="shadow-sm">
-      <thead className="bg-primary text-white">
+    <Table striped bordered hover responsive variant={theme === 'dark' ? 'dark' : 'light'} className="shadow-sm">
+      <thead className={theme === 'dark' ? "text-white" : "bg-light text-dark"} style={{ backgroundColor: theme === 'dark' ? 'var(--bg-dark-highlight, #2c3034)' : '' }}>
         <tr>
           <th>Booking ID</th>
           <th>Court ID</th>

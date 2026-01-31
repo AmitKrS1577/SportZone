@@ -22,31 +22,42 @@ const BookingForm = ({
 }) => {
 
   const handleTimeSlotClick = (hour) => {
-    const isBooked = bookedSlots.includes(hour);
-    if (isBooked) return;
+    const now = new Date();
+    const currentHour = now.getHours();
+    const isToday = selectedDate === now.toISOString().split('T')[0];
+    const isPast = isToday && hour <= currentHour;
 
-    const currentStart = startTime ? parseInt(startTime.split(':')[0]) : null;
+    if (bookedSlots.includes(hour) || isPast) return;
 
-    if (currentStart === hour && parseInt(endTime.split(':')[0]) === hour + 1) {
-      setStartTime('');
-      setEndTime('');
-      return;
-    }
-
-    if (currentStart === null) {
+    if (!startTime) {
       setStartTime(`${hour.toString().padStart(2, '0')}:00`);
       setEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
       return;
     }
 
-    if (hour > currentStart) {
-      let blocked = false;
-      for (let h = currentStart; h < hour; h++) {
-        if (bookedSlots.includes(h)) blocked = true;
-      }
+    const currentStart = parseInt(startTime.split(':')[0]);
+    const currentEnd = parseInt(endTime.split(':')[0]);
+    const isSingleSlot = (currentEnd - currentStart) === 1;
 
-      if (!blocked) {
-        setEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
+    if (currentStart === hour && isSingleSlot) {
+      setStartTime('');
+      setEndTime('');
+      return;
+    }
+
+    if (hour > currentStart) {
+      if (isSingleSlot) {
+        let blocked = false;
+        for (let h = currentStart; h < hour; h++) {
+          if (bookedSlots.includes(h)) blocked = true;
+        }
+
+        if (!blocked) {
+          setEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
+        } else {
+          setStartTime(`${hour.toString().padStart(2, '0')}:00`);
+          setEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
+        }
       } else {
         setStartTime(`${hour.toString().padStart(2, '0')}:00`);
         setEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
@@ -155,12 +166,33 @@ const BookingForm = ({
                       <div className="mb-4">
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
                           {(() => {
-                            const open = venue.openTime ? parseInt(venue.openTime.split(':')[0]) : 0;
-                            const close = venue.closeTime ? parseInt(venue.closeTime.split(':')[0]) : 24;
+                            let open = 0;
+                            let close = 24;
+
+                            if (venue.openTime) {
+                              open = parseInt(venue.openTime.split(':')[0]);
+                            }
+
+                            if (venue.closeTime) {
+                              const [h, m] = venue.closeTime.split(':').map(Number);
+                              close = h;
+                              if (m > 0) close += 1;
+                            }
+
+                            if (close <= open && venue.closeTime) {
+                                close += 24;
+                            }
+
                             const totalHours = close - open;
                             return [...Array(totalHours)].map((_, idx) => {
                               const hour = idx + open;
                               const isBooked = bookedSlots.includes(hour);
+
+                              const now = new Date();
+                              const currentHour = now.getHours();
+                              const isToday = selectedDate === now.toISOString().split('T')[0];
+                              const isPast = isToday && hour <= currentHour;
+
                               const startH = startTime ? parseInt(startTime.split(':')[0]) : null;
                               const endH = endTime ? parseInt(endTime.split(':')[0]) : null;
                               const isSelected = startH !== null && endH !== null && hour >= startH && hour < endH;
@@ -172,31 +204,35 @@ const BookingForm = ({
                                   style={{
                                     width: '100%',
                                     height: '45px',
-                                    cursor: isBooked ? 'not-allowed' : 'pointer',
+                                    cursor: (isBooked || isPast) ? 'not-allowed' : 'pointer',
                                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                                     borderRadius: '8px',
                                     background: isBooked
                                       ? 'rgba(255, 0, 0, 0.1)'
-                                      : isSelected
-                                        ? 'linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%)'
-                                        : 'var(--input-bg)',
+                                      : isPast
+                                        ? 'rgba(128, 128, 128, 0.1)'
+                                        : isSelected
+                                          ? 'linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%)'
+                                          : 'var(--input-bg)',
                                     border: isBooked
                                       ? '1px solid rgba(255, 77, 77, 0.3)'
-                                      : isSelected
-                                        ? 'none'
-                                        : '1px solid var(--border-color)',
+                                      : isPast
+                                        ? '1px solid rgba(128, 128, 128, 0.3)'
+                                        : isSelected
+                                          ? 'none'
+                                          : '1px solid var(--border-color)',
                                     boxShadow: isSelected
                                       ? '0 4px 15px rgba(13, 202, 240, 0.4)'
                                       : 'none',
                                     transform: isSelected ? 'translateY(-2px)' : 'none',
-                                    opacity: isBooked ? 0.6 : 1
+                                    opacity: (isBooked || isPast) ? 0.6 : 1
                                   }}
-                                  title={isBooked ? 'Booked' : `${hour}:00 - ${hour + 1}:00`}
+                                  title={isBooked ? 'Booked' : isPast ? 'Past Time' : `${hour}:00 - ${hour + 1}:00`}
                                 >
                                   <span style={{
                                     fontSize: '0.75rem',
                                     fontWeight: isSelected ? '800' : '600',
-                                    color: isBooked ? '#ff6b6b' : isSelected ? '#fff' : 'var(--text-primary)'
+                                    color: isBooked ? '#ff6b6b' : isPast ? '#999' : isSelected ? '#fff' : 'var(--text-primary)'
                                   }}>
                                     {hour}:00 - {hour + 1}:00
                                   </span>

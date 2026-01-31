@@ -13,8 +13,8 @@ const VenueDetails = () => {
 
   const [selectedSport, setSelectedSport] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
-  const [startTime, setStartTime] = useState('10:00');
-  const [endTime, setEndTime] = useState('11:00');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [selectedCourt, setSelectedCourt] = useState(null);
   const [bookingError, setBookingError] = useState('');
   const [venueBookings, setVenueBookings] = useState([]);
@@ -120,8 +120,27 @@ const VenueDetails = () => {
       const duration = endHour - startHour;
       const amount = duration * selectedCourt.pricePerHour;
 
-      const formattedStartTime = `${selectedDate}T${startTime}:00`;
-      const formattedEndTime = `${selectedDate}T${endTime}:00`;
+      const formatDateTime = (dateStr, timeStr) => {
+        const [h, m] = timeStr.split(':').map(Number);
+        const date = new Date(dateStr);
+        date.setHours(h, m, 0, 0);
+        const d = new Date(dateStr);
+        d.setHours(h);
+        d.setMinutes(m);
+        d.setSeconds(0);
+
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hour = String(d.getHours()).padStart(2, '0');
+        const minute = String(d.getMinutes()).padStart(2, '0');
+        const second = String(d.getSeconds()).padStart(2, '0');
+
+        return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+      };
+
+      const formattedStartTime = formatDateTime(selectedDate, startTime);
+      const formattedEndTime = formatDateTime(selectedDate, endTime);
 
       const bookingData = {
         userId: user.id,

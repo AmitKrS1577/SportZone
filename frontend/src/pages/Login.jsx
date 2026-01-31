@@ -35,14 +35,14 @@ const Login = () => {
   return (
     <Container className="d-flex justify-content-center align-items-center" style={{ minHeight: '80vh' }}>
       <Card style={{ width: '400px' }} className="p-4 shadow">
-        <h2 className="text-center mb-4">Login</h2>
+        <h2 className="text-center mb-4">Login to SportZone</h2>
         {error && <Alert variant="danger">{error}</Alert>}
         <Form onSubmit={handleSubmit}>
           <Form.Group className="mb-3" controlId="formBasicEmail">
             <Form.Label>Username or Email</Form.Label>
             <Form.Control
               type="text"
-              placeholder="Enter username or email"
+              placeholder="Enter your username or email"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               required
@@ -53,7 +53,7 @@ const Login = () => {
             <Form.Label>Password</Form.Label>
             <Form.Control
               type="password"
-              placeholder="Password"
+              placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required

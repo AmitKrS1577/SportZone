@@ -5,9 +5,6 @@ import { useTheme } from '../context/ThemeContext';
 
 const AdminDashboard = () => {
   const { theme } = useTheme();
-  const [bookings, setBookings] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [venues, setVenues] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -21,31 +18,62 @@ const AdminDashboard = () => {
     amount: ''
   });
 
+  const [users, setUsers] = useState([]);
+  const [venues, setVenues] = useState([]);
+  const [bookings, setBookings] = useState([]);
+
+  const [usersPage, setUsersPage] = useState(0);
+  const [venuesPage, setVenuesPage] = useState(0);
+  const [bookingsPage, setBookingsPage] = useState(0);
+
+  const [totalPagesUsers, setTotalPagesUsers] = useState(0);
+  const [totalPagesVenues, setTotalPagesVenues] = useState(0);
+  const [totalPagesBookings, setTotalPagesBookings] = useState(0);
+
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [totalVenues, setTotalVenues] = useState(0);
+  const [totalBookings, setTotalBookings] = useState(0);
+
+  const [activeTab, setActiveTab] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    const delayDebounceFn = setTimeout(() => {
+      fetchDashboardData();
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [activeTab, usersPage, venuesPage, bookingsPage, searchTerm]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [resUsers, resVenues, resBookings] = await Promise.all([
-        axios.get('/api/users'),
-        axios.get('/api/venues/admin/all'),
-        axios.get('/api/bookings')
-      ]);
+      const token = localStorage.getItem('jwtToken');
+      const headers = { Authorization: `Bearer ${token}` };
 
-      setUsers(resUsers.data);
-      setVenues(resVenues.data);
+      const searchParam = searchTerm ? `&search=${searchTerm}` : '';
 
-      const upcomingBookings = resBookings.data.filter(b => {
-        const isFuture = new Date(b.endTime) > new Date();
-        const isNotCancelled = b.status !== 'CANCELLED';
-        return isFuture && isNotCancelled;
-      });
+      const userSearch = activeTab === 'USERS' ? searchParam : '';
+      const venueSearch = activeTab === 'VENUES' ? searchParam : '';
 
-      setBookings(upcomingBookings.sort((a, b) => new Date(a.startTime) - new Date(b.startTime)));
+      const usersRes = await axios.get(`/api/users?page=${usersPage}&size=10${userSearch}`, { headers });
+      const venuesRes = await axios.get(`/api/venues/admin/all?page=${venuesPage}&size=10${venueSearch}`, { headers });
+      const bookingsRes = await axios.get(`/api/bookings?page=${bookingsPage}&size=10&upcoming=true`, { headers });
+
+      setUsers(usersRes.data.content);
+      setTotalPagesUsers(usersRes.data.totalPages);
+      setTotalUsers(usersRes.data.totalElements);
+
+      setVenues(venuesRes.data.content);
+      setTotalPagesVenues(venuesRes.data.totalPages);
+      setTotalVenues(venuesRes.data.totalElements);
+
+      setBookings(bookingsRes.data.content);
+      setTotalPagesBookings(bookingsRes.data.totalPages);
+      setTotalBookings(bookingsRes.data.totalElements);
+
     } catch (err) {
-      console.error(err);
+      console.error("Failed to fetch dashboard data", err);
       setError('Failed to fetch dashboard data');
     } finally {
       setLoading(false);
@@ -55,7 +83,8 @@ const AdminDashboard = () => {
   const handleCancel = async (id) => {
     if (window.confirm('Are you sure you want to cancel this booking?')) {
       try {
-        await axios.put(`/api/bookings/${id}/cancel`);
+        const token = localStorage.getItem('jwtToken');
+        await axios.put(`/api/bookings/${id}/cancel`, {}, { headers: { Authorization: `Bearer ${token}` } });
         alert('Booking cancelled successfully');
         fetchDashboardData();
       } catch (err) {
@@ -66,7 +95,8 @@ const AdminDashboard = () => {
 
   const handleApproveVenue = async (id) => {
     try {
-      await axios.put(`/api/venues/${id}/approve`);
+      const token = localStorage.getItem('jwtToken');
+      await axios.put(`/api/venues/${id}/approve`, {}, { headers: { Authorization: `Bearer ${token}` } });
       setVenues(venues.map(v => v.id === id ? { ...v, status: 'APPROVED' } : v));
       alert('Venue Approved!');
     } catch (err) {
@@ -102,7 +132,8 @@ const AdminDashboard = () => {
         amount: parseFloat(formData.amount)
       };
 
-      await axios.put(`/api/bookings/${selectedBooking.id}`, updatedBooking);
+      const token = localStorage.getItem('jwtToken');
+      await axios.put(`/api/bookings/${selectedBooking.id}`, updatedBooking, { headers: { Authorization: `Bearer ${token}` } });
       alert('Booking updated successfully');
       setShowEditModal(false);
       fetchDashboardData();
@@ -112,37 +143,27 @@ const AdminDashboard = () => {
     }
   };
 
-  const [activeTab, setActiveTab] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const handleUpdateRole = async (userId, newRole) => {
+    if (!window.confirm(`Change role to ${newRole}?`)) return;
+    try {
+      const token = localStorage.getItem('jwtToken');
+      await axios.put(`/api/users/${userId}`, { role: newRole }, { headers: { Authorization: `Bearer ${token}` } });
+      alert('Role updated');
+      fetchDashboardData();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update role');
+    }
+  };
 
-  useEffect(() => {
-    setSearchTerm('');
-    setCurrentPage(1);
-  }, [activeTab]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
-
-
-  if (loading) return <div className="text-center mt-5 text-light">Loading Admin Dashboard...</div>;
-
-  const filteredUsers = users.filter(u =>
-    u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const filteredVenues = venues.filter(v =>
-    v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    v.location.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  if (loading && users.length === 0) return <div className="text-center mt-5 text-light">Loading Admin Dashboard...</div>;
 
   const filteredBookings = bookings.filter(b => {
     const venueName = venues.find(v => v.id === b.venueId)?.name || '';
     const userName = users.find(u => u.id === b.userId)?.name || '';
     const searchLower = searchTerm.toLowerCase();
+
+    if (activeTab !== 'BOOKINGS') return true;
 
     return (
       venueName.toLowerCase().includes(searchLower) ||
@@ -151,15 +172,15 @@ const AdminDashboard = () => {
     );
   });
 
-  const renderPagination = (totalItems) => {
-    const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const renderPagination = (totalPages, currentPage, setPage) => {
     if (totalPages <= 1) return null;
 
     let items = [];
+    const displayPage = currentPage + 1;
 
     for (let number = 1; number <= totalPages; number++) {
       items.push(
-        <Pagination.Item key={number} active={number === currentPage} onClick={() => setCurrentPage(number)}>
+        <Pagination.Item key={number} active={number === displayPage} onClick={() => setPage(number - 1)}>
           {number}
         </Pagination.Item>,
       );
@@ -168,9 +189,9 @@ const AdminDashboard = () => {
     return (
       <div className="d-flex justify-content-center mt-3">
         <Pagination>
-          <Pagination.Prev onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} />
+          <Pagination.Prev onClick={() => setPage(Math.max(0, currentPage - 1))} disabled={currentPage === 0} />
           {items}
-          <Pagination.Next onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} />
+          <Pagination.Next onClick={() => setPage(Math.min(totalPages - 1, currentPage + 1))} disabled={currentPage === totalPages - 1} />
         </Pagination>
       </div>
     );
@@ -197,7 +218,7 @@ const AdminDashboard = () => {
             <Card.Body className="d-flex align-items-center justify-content-between">
               <div>
                 <h6 className="mb-0 opacity-75">All Users</h6>
-                <h2 className="fw-bold mb-0">{users.length}</h2>
+                <h2 className="fw-bold mb-0">{totalUsers}</h2>
               </div>
               <i className="bi bi-people-fill fs-1 opacity-50"></i>
             </Card.Body>
@@ -214,7 +235,7 @@ const AdminDashboard = () => {
             <Card.Body className="d-flex align-items-center justify-content-between">
               <div>
                 <h6 className="mb-0 opacity-75">Total Venues</h6>
-                <h2 className="fw-bold mb-0">{venues.length}</h2>
+                <h2 className="fw-bold mb-0">{totalVenues}</h2>
               </div>
               <i className="bi bi-geo-alt-fill fs-1 opacity-50"></i>
             </Card.Body>
@@ -231,7 +252,7 @@ const AdminDashboard = () => {
             <Card.Body className="d-flex align-items-center justify-content-between">
               <div>
                 <h6 className="mb-0 opacity-75">Upcoming Bookings</h6>
-                <h2 className="fw-bold mb-0">{bookings.length}</h2>
+                <h2 className="fw-bold mb-0">{totalBookings}</h2>
               </div>
               <i className="bi bi-calendar-check-fill fs-1 opacity-50"></i>
             </Card.Body>
@@ -265,8 +286,8 @@ const AdminDashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(user => {
-                  const ownedVenues = venues.filter(v => v.ownerId === user.id);
+                {users.map(user => {
+                  const ownedVenues = venues.filter(v => v.ownerId === user.id); // This might be empty if venues not loaded, but good enough for now
                   return (
                     <tr key={user.id}>
                       <td>{user.id}</td>
@@ -281,19 +302,7 @@ const AdminDashboard = () => {
                         <Form.Select
                           size="sm"
                           value={user.role}
-                          onChange={async (e) => {
-                            const newRole = e.target.value;
-                            if (window.confirm(`Change role of ${user.name} to ${newRole}?`)) {
-                              try {
-                                await axios.put(`/api/users/${user.id}`, { role: newRole });
-                                fetchDashboardData();
-                              } catch (err) {
-                                alert('Failed to update role');
-                              }
-                            } else {
-                              fetchDashboardData();
-                            }
-                          }}
+                          onChange={(e) => handleUpdateRole(user.id, e.target.value)}
                           className="border-secondary"
                           style={{ width: '150px', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)' }}
                         >
@@ -312,11 +321,11 @@ const AdminDashboard = () => {
                     </tr>
                   );
                 })}
-                {filteredUsers.length === 0 && <tr><td colSpan="6" className="text-center">No Users found matching "{searchTerm}".</td></tr>}
+                {users.length === 0 && <tr><td colSpan="6" className="text-center">No Users found.</td></tr>}
               </tbody>
             </Table>
           </Card>
-          {renderPagination(filteredUsers.length)}
+          {renderPagination(totalPagesUsers, usersPage, setUsersPage)}
         </div>
       )}
 
@@ -347,7 +356,7 @@ const AdminDashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredVenues.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(venue => (
+                {venues.map(venue => (
                   <tr key={venue.id}>
                     <td>{venue.id}</td>
                     <td>{venue.name}</td>
@@ -368,18 +377,18 @@ const AdminDashboard = () => {
                     </td>
                   </tr>
                 ))}
-                {filteredVenues.length === 0 && <tr><td colSpan="5" className="text-center">No Venues found matching "{searchTerm}".</td></tr>}
+                {venues.length === 0 && <tr><td colSpan="7" className="text-center">No Venues found.</td></tr>}
               </tbody>
             </Table>
           </Card>
-          {renderPagination(filteredVenues.length)}
+          {renderPagination(totalPagesVenues, venuesPage, setVenuesPage)}
         </div>
       )}
 
       {activeTab === 'BOOKINGS' && (
         <div className="fade-in">
           <div className="d-flex justify-content-between align-items-center mb-3 border-bottom border-secondary pb-2">
-            <h4 className="fw-bold mb-0" style={{ color: 'var(--text-primary)' }}>Upcoming Bookings ({filteredBookings.length})</h4>
+            <h4 className="fw-bold mb-0" style={{ color: 'var(--text-primary)' }}>Upcoming Bookings ({totalBookings})</h4>
             <Form.Control
               type="text"
               placeholder="Search bookings..."
@@ -394,9 +403,9 @@ const AdminDashboard = () => {
               <thead>
                 <tr>
                   <th>ID</th>
+                  <th>User</th>
                   <th>Venue</th>
                   <th>Court</th>
-                  <th>User</th>
                   <th>Date</th>
                   <th>Time</th>
                   <th>Amount</th>
@@ -405,31 +414,35 @@ const AdminDashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredBookings.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(booking => (
-                  <tr key={booking.id}>
-                    <td>{booking.id}</td>
-                    <td>{venues.find(v => v.id === booking.venueId)?.name || booking.venueId}</td>
-                    <td>{booking.courtId}</td>
-                    <td>{users.find(u => u.id === booking.userId)?.name || booking.userId}</td>
-                    <td>{booking.startTime.split('T')[0]}</td>
-                    <td>{booking.startTime.split('T')[1].substring(0, 5)} - {booking.endTime.split('T')[1].substring(0, 5)}</td>
-                    <td>₹{booking.amount}</td>
-                    <td>
-                      <Badge bg={booking.status === 'CONFIRMED' ? 'success' : booking.status === 'CANCELLED' ? 'danger' : 'warning'}>
-                        {booking.status}
-                      </Badge>
-                    </td>
-                    <td>
-                      <Button variant="primary" size="sm" className="me-2" onClick={() => handleEdit(booking)}>Edit</Button>
-                      <Button variant="danger" size="sm" onClick={() => handleCancel(booking.id)}>Cancel</Button>
-                    </td>
-                  </tr>
-                ))}
+                {filteredBookings.map(booking => {
+                  const venueName = venues.find(v => v.id === booking.venueId)?.name || 'ID: ' + booking.venueId;
+                  const userName = users.find(u => u.id === booking.userId)?.name || 'ID: ' + booking.userId;
+                  return (
+                    <tr key={booking.id}>
+                      <td>{booking.id}</td>
+                      <td>{userName}</td>
+                      <td>{venueName}</td>
+                      <td>{booking.courtId}</td>
+                      <td>{booking.startTime.split('T')[0]}</td>
+                      <td>{booking.startTime.split('T')[1].substring(0, 5)} - {booking.endTime.split('T')[1].substring(0, 5)}</td>
+                      <td>₹{booking.amount}</td>
+                      <td>
+                        <Badge bg={booking.status === 'CONFIRMED' ? 'success' : booking.status === 'CANCELLED' ? 'danger' : 'warning'}>
+                          {booking.status}
+                        </Badge>
+                      </td>
+                      <td>
+                        <Button variant="primary" size="sm" className="me-2" onClick={() => handleEdit(booking)}>Edit</Button>
+                        <Button variant="danger" size="sm" onClick={() => handleCancel(booking.id)}>Cancel</Button>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {filteredBookings.length === 0 && <tr><td colSpan="9" className="text-center">No Bookings found matching "{searchTerm}".</td></tr>}
               </tbody>
             </Table>
           </Card>
-          {renderPagination(filteredBookings.length)}
+          {renderPagination(totalPagesBookings, bookingsPage, setBookingsPage)}
         </div>
       )}
 

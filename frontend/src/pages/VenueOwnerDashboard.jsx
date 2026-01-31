@@ -1,14 +1,24 @@
 import { useState, useEffect } from 'react';
-import { Container, Table, Button, Modal, Form, Alert, Row, Col, Card, Badge } from 'react-bootstrap';
+import { Container, Table, Button, Modal, Form, Alert, Row, Col, Card, Badge, Pagination } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
+import { useTheme } from '../context/ThemeContext';
+
 const VenueOwnerDashboard = () => {
+  const { theme } = useTheme();
   const [venues, setVenues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBookingsModal, setShowBookingsModal] = useState(false);
   const [venueBookings, setVenueBookings] = useState([]);
+  const [bookingsPage, setBookingsPage] = useState(0);
+  const [bookingsTotalPages, setBookingsTotalPages] = useState(0);
+  const [selectedVenueId, setSelectedVenueId] = useState(null);
+
+  const [showEditBookingModal, setShowEditBookingModal] = useState(false);
+  const [editingBooking, setEditingBooking] = useState(null);
+
   const [newVenue, setNewVenue] = useState({ name: '', location: '', description: '', imageUrl: '', courts: [] });
   const [tempCourt, setTempCourt] = useState({ name: '', sportType: 'Cricket', pricePerHour: '' });
   const navigate = useNavigate();
@@ -34,28 +44,96 @@ const VenueOwnerDashboard = () => {
     }
   };
 
-  const handleViewBookings = async (venueId) => {
+  const fetchVenueBookings = async (venueId, page) => {
     try {
-      const res = await axios.get(`/api/bookings/venue/${venueId}`);
-      setVenueBookings(res.data.sort((a, b) => new Date(b.startTime) - new Date(a.startTime)));
-      setShowBookingsModal(true);
+      const res = await axios.get(`/api/bookings/venue/${venueId}?page=${page}&size=5`);
+      setVenueBookings(res.data.content);
+      setBookingsTotalPages(res.data.totalPages);
     } catch (err) {
       console.error("Failed to fetch bookings", err);
       alert("Could not fetch bookings.");
     }
   };
 
+  const handleViewBookings = async (venueId) => {
+    setSelectedVenueId(venueId);
+    setBookingsPage(0);
+    setShowBookingsModal(true);
+    await fetchVenueBookings(venueId, 0);
+  };
+
+  const handlePageChange = (newPage) => {
+    setBookingsPage(newPage);
+    fetchVenueBookings(selectedVenueId, newPage);
+  };
+
+  const handleCancelBooking = async (bookingId) => {
+    if (!window.confirm("Are you sure you want to cancel this booking?")) return;
+    try {
+      await axios.put(`/api/bookings/${bookingId}/cancel`);
+      alert("Booking Cancelled");
+      fetchVenueBookings(selectedVenueId, bookingsPage);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to cancel booking");
+    }
+  };
+
+  const handleEditClick = (booking) => {
+    setEditingBooking(booking);
+    setShowEditBookingModal(true);
+  };
+
+  const handleSaveBookingEdit = async () => {
+    try {
+      const { id, ...data } = editingBooking;
+      await axios.put(`/api/bookings/${id}`, editingBooking);
+      alert("Booking Updated Successfully");
+      setShowEditBookingModal(false);
+      fetchVenueBookings(selectedVenueId, bookingsPage);
+    } catch (err) {
+      console.error(err);
+      const msg = err.response?.data?.message || err.response?.data || "Failed to update booking";
+      alert("Update Failed: " + (typeof msg === 'object' ? JSON.stringify(msg) : msg));
+    }
+  };
+
+
+
+
   const handleAddVenue = async () => {
     try {
-      const venueData = { ...newVenue, ownerId: user.id };
-      await axios.post('/api/venues', venueData);
+      const venueData = { 
+          name: newVenue.name,
+          location: newVenue.location,
+          description: newVenue.description,
+          ownerId: user.id,
+          courts: newVenue.courts
+      };
+
+      const formData = new FormData();
+      formData.append('venue', new Blob([JSON.stringify(venueData)], { type: 'application/json' }));
+      
+      if (newVenue.imageFiles) {
+          for (let i = 0; i < newVenue.imageFiles.length; i++) {
+              formData.append('images', newVenue.imageFiles[i]);
+          }
+      }
+
+      await axios.post('/api/venues', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
       setShowAddModal(false);
-      setNewVenue({ name: '', location: '', description: '', imageUrl: '', courts: [] });
+      setNewVenue({ name: '', location: '', description: '', imageUrl: '', courts: [], imageFiles: [] });
+      fetchMyVenues();
+      alert('Venue Added Successfully!');
       fetchMyVenues();
       alert('Venue Added Successfully!');
     } catch (err) {
       console.error(err);
-      alert('Failed to add venue');
+      const errorMsg = err.response?.data?.message || err.message || "Failed to add venue";
+      alert(`Failed to add venue: ${errorMsg}`);
     }
   };
 
@@ -72,7 +150,10 @@ const VenueOwnerDashboard = () => {
 
   const addTempCourt = () => {
     if (!tempCourt.name || !tempCourt.pricePerHour) return alert("Please fill court details");
-    setNewVenue({ ...newVenue, courts: [...newVenue.courts, tempCourt] });
+    setNewVenue({ 
+        ...newVenue, 
+        courts: [...newVenue.courts, { ...tempCourt, pricePerHour: parseFloat(tempCourt.pricePerHour) }] 
+    });
     setTempCourt({ name: '', sportType: 'Cricket', pricePerHour: '' });
   };
 
@@ -87,7 +168,7 @@ const VenueOwnerDashboard = () => {
     <Container className="py-5">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="fw-bold text-light mb-1">Owner Dashboard</h2>
+          <h2 className="fw-bold mb-1" style={{ color: 'var(--text-primary)' }}>Owner Dashboard</h2>
           <p className="text-muted">Manage your listed venues and courts</p>
         </div>
         <Button
@@ -99,14 +180,14 @@ const VenueOwnerDashboard = () => {
       </div>
 
       {venues.length === 0 ? (
-        <Alert variant="info" className="bg-dark text-light border-secondary">
+        <Alert variant="info" className="border-secondary" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
           You haven't listed any venues yet. Click "List New Venue" to get started.
         </Alert>
       ) : (
         <Row>
           {venues.map(venue => (
             <Col md={6} lg={4} key={venue.id} className="mb-4">
-              <Card className="h-100 bg-dark text-light border-secondary shadow-lg">
+              <Card className="h-100 border-secondary shadow-lg" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
                 <Card.Img
                   variant="top"
                   src={venue.imageUrl || "https://via.placeholder.com/400x200"}
@@ -148,15 +229,15 @@ const VenueOwnerDashboard = () => {
         </Row>
       )}
 
-      <Modal show={showBookingsModal} onHide={() => setShowBookingsModal(false)} size="lg" centered className="dark-modal">
-        <Modal.Header closeButton className="bg-dark text-light border-secondary">
+      <Modal show={showBookingsModal} onHide={() => setShowBookingsModal(false)} size="lg" centered>
+        <Modal.Header closeButton style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}>
           <Modal.Title>Venue Bookings</Modal.Title>
         </Modal.Header>
-        <Modal.Body className="bg-dark text-light">
+        <Modal.Body style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
           {venueBookings.length === 0 ? (
-            <Alert variant="info" className="bg-dark text-light border-secondary">No bookings found for this venue.</Alert>
+            <Alert variant="info">No bookings found for this venue.</Alert>
           ) : (
-            <Table striped bordered hover variant="dark" responsive>
+            <Table striped bordered hover variant={theme} responsive>
               <thead>
                 <tr>
                   <th>ID</th>
@@ -166,6 +247,7 @@ const VenueOwnerDashboard = () => {
                   <th>Time</th>
                   <th>Status</th>
                   <th>Amt</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -185,25 +267,143 @@ const VenueOwnerDashboard = () => {
                       </Badge>
                     </td>
                     <td>₹{b.amount}</td>
+                    <td>
+                      <div className="d-flex gap-1">
+                        <Button variant="outline-primary" size="sm" onClick={() => handleEditClick(b)} title="Edit Booking">
+                          <i className="bi bi-pencil"></i>
+                        </Button>
+                        {b.status !== 'CANCELLED' && (
+                          <Button variant="outline-danger" size="sm" onClick={() => handleCancelBooking(b.id)} title="Cancel Booking">
+                            <i className="bi bi-x-lg"></i>
+                          </Button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </Table>
           )}
+
+          {venueBookings.length > 0 && bookingsTotalPages > 1 && (
+            <div className="d-flex justify-content-center mt-3">
+              <Pagination>
+                <Pagination.Prev
+                  onClick={() => handlePageChange(Math.max(0, bookingsPage - 1))}
+                  disabled={bookingsPage === 0}
+                />
+                {[...Array(bookingsTotalPages).keys()].map(number => (
+                  <Pagination.Item
+                    key={number + 1}
+                    active={number === bookingsPage}
+                    onClick={() => handlePageChange(number)}
+                  >
+                    {number + 1}
+                  </Pagination.Item>
+                ))}
+                <Pagination.Next
+                  onClick={() => handlePageChange(Math.min(bookingsTotalPages - 1, bookingsPage + 1))}
+                  disabled={bookingsPage === bookingsTotalPages - 1}
+                />
+              </Pagination>
+            </div>
+          )}
         </Modal.Body>
       </Modal>
 
-      <Modal show={showAddModal} onHide={() => setShowAddModal(false)} centered className="dark-modal">
-        <Modal.Header closeButton className="bg-dark text-light border-secondary">
+      {/* Edit Booking Modal */}
+      <Modal show={showEditBookingModal} onHide={() => setShowEditBookingModal(false)} centered>
+        <Modal.Header closeButton style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}>
+          <Modal.Title>Edit Booking #{editingBooking?.id}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
+          {editingBooking && (
+            <Form>
+              <Form.Group className="mb-3">
+                <Form.Label>Status</Form.Label>
+                <Form.Select
+                  value={editingBooking.status}
+                  onChange={(e) => setEditingBooking({ ...editingBooking, status: e.target.value })}
+                  style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}
+                >
+                  <option value="PENDING">PENDING</option>
+                  <option value="CONFIRMED">CONFIRMED</option>
+                  <option value="CANCELLED">CANCELLED</option>
+                  <option value="COMPLETED">COMPLETED</option>
+                  <option value="BLOCKED">BLOCKED</option>
+                </Form.Select>
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Date</Form.Label>
+                <Form.Control
+                  type="date"
+                  value={editingBooking.startTime.split('T')[0]}
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    const time = editingBooking.startTime.split('T')[1];
+                    const endTime = editingBooking.endTime.split('T')[1];
+                    setEditingBooking({
+                      ...editingBooking,
+                      startTime: `${newDate}T${time}`,
+                      endTime: `${newDate}T${endTime}`
+                    });
+                  }}
+                  style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Start Time</Form.Label>
+                <Form.Control
+                  type="time"
+                  value={editingBooking.startTime.split('T')[1].substring(0, 5)}
+                  onChange={(e) => {
+                    const date = editingBooking.startTime.split('T')[0];
+                    setEditingBooking({ ...editingBooking, startTime: `${date}T${e.target.value}:00` });
+                  }}
+                  style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>End Time</Form.Label>
+                <Form.Control
+                  type="time"
+                  value={editingBooking.endTime.split('T')[1].substring(0, 5)}
+                  onChange={(e) => {
+                    const date = editingBooking.endTime.split('T')[0];
+                    setEditingBooking({ ...editingBooking, endTime: `${date}T${e.target.value}:00` });
+                  }}
+                  style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Amount (₹)</Form.Label>
+                <Form.Control
+                  type="number"
+                  value={editingBooking.amount}
+                  onChange={(e) => setEditingBooking({ ...editingBooking, amount: e.target.value })}
+                  style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}
+                />
+              </Form.Group>
+            </Form>
+          )}
+        </Modal.Body>
+        <Modal.Footer style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--bs-border-color)' }}>
+          <Button variant="secondary" onClick={() => setShowEditBookingModal(false)}>Close</Button>
+          <Button variant="primary" onClick={handleSaveBookingEdit}>Save Changes</Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showAddModal} onHide={() => setShowAddModal(false)} centered>
+        <Modal.Header closeButton style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}>
           <Modal.Title>List New Venue</Modal.Title>
         </Modal.Header>
-        <Modal.Body className="bg-dark text-light">
+        <Modal.Body style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
           <Form>
             <Form.Group className="mb-3">
               <Form.Label>Venue Name</Form.Label>
               <Form.Control
                 type="text"
-                className="bg-dark text-light border-secondary"
+                style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}
                 value={newVenue.name}
                 onChange={(e) => setNewVenue({ ...newVenue, name: e.target.value })}
               />
@@ -212,7 +412,7 @@ const VenueOwnerDashboard = () => {
               <Form.Label>Location</Form.Label>
               <Form.Control
                 type="text"
-                className="bg-dark text-light border-secondary"
+                style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}
                 value={newVenue.location}
                 onChange={(e) => setNewVenue({ ...newVenue, location: e.target.value })}
               />
@@ -222,19 +422,38 @@ const VenueOwnerDashboard = () => {
               <Form.Control
                 as="textarea"
                 rows={3}
-                className="bg-dark text-light border-secondary"
+                style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}
                 value={newVenue.description}
                 onChange={(e) => setNewVenue({ ...newVenue, description: e.target.value })}
               />
             </Form.Group>
             <Form.Group className="mb-3">
-              <Form.Label>Image URL</Form.Label>
+              <Form.Label>Venue Images</Form.Label>
               <Form.Control
-                type="text"
-                className="bg-dark text-light border-secondary"
-                value={newVenue.imageUrl}
-                onChange={(e) => setNewVenue({ ...newVenue, imageUrl: e.target.value })}
+                type="file"
+                multiple
+                accept="image/*"
+                style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}
+                onChange={(e) => {
+                    const files = Array.from(e.target.files);
+                    if(files.length > 5) {
+                        alert("You can upload a maximum of 5 images.");
+                        e.target.value = "";
+                        return;
+                    }
+                    for(let file of files) {
+                        if(file.size > 5 * 1024 * 1024) {
+                            alert(`File ${file.name} is too large. Max size is 5MB.`);
+                            e.target.value = "";
+                            return;
+                        }
+                    }
+                    setNewVenue({ ...newVenue, imageFiles: e.target.files });
+                }}
               />
+              <Form.Text className="text-muted">
+                  Max size: 5MB per image. Accepted formats: JPG, PNG, GIF, etc.
+              </Form.Text>
             </Form.Group>
 
             <hr className="border-secondary my-4" />
@@ -245,7 +464,7 @@ const VenueOwnerDashboard = () => {
                 <Form.Control
                   placeholder="Court Name"
                   size="sm"
-                  className="bg-dark text-light border-secondary"
+                  style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}
                   value={tempCourt.name}
                   onChange={(e) => setTempCourt({ ...tempCourt, name: e.target.value })}
                 />
@@ -253,7 +472,7 @@ const VenueOwnerDashboard = () => {
               <Col md={4}>
                 <Form.Select
                   size="sm"
-                  className="bg-dark text-light border-secondary"
+                  style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}
                   value={tempCourt.sportType}
                   onChange={(e) => setTempCourt({ ...tempCourt, sportType: e.target.value })}
                 >
@@ -265,7 +484,7 @@ const VenueOwnerDashboard = () => {
                   placeholder="Price"
                   type="number"
                   size="sm"
-                  className="bg-dark text-light border-secondary"
+                  style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', borderColor: 'var(--bs-border-color)' }}
                   value={tempCourt.pricePerHour}
                   onChange={(e) => setTempCourt({ ...tempCourt, pricePerHour: e.target.value })}
                 />
@@ -280,7 +499,7 @@ const VenueOwnerDashboard = () => {
                 <h6 className="small text-muted">Added Courts:</h6>
                 <ul className="list-group list-group-flush bg-transparent">
                   {newVenue.courts.map((c, i) => (
-                    <li key={i} className="list-group-item bg-transparent text-light border-secondary d-flex justify-content-between align-items-center py-1 px-0">
+                    <li key={i} className="list-group-item bg-transparent border-secondary d-flex justify-content-between align-items-center py-1 px-0" style={{ color: 'var(--text-primary)' }}>
                       <small>{c.name} ({c.sportType}) - ₹{c.pricePerHour}</small>
                       <Button variant="link" size="sm" className="text-danger p-0" onClick={() => removeTempCourt(i)}>
                         <i className="bi bi-x-lg"></i>
@@ -292,7 +511,8 @@ const VenueOwnerDashboard = () => {
             )}
           </Form>
         </Modal.Body>
-        <Modal.Footer className="bg-dark border-secondary">
+
+        <Modal.Footer style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--bs-border-color)' }}>
           <Button variant="secondary" onClick={() => setShowAddModal(false)}>Close</Button>
           <Button variant="primary" className="btn-neon" onClick={handleAddVenue}>List Venue</Button>
         </Modal.Footer>

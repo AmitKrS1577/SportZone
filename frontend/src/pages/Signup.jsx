@@ -98,7 +98,7 @@ const Signup = () => {
       navigate('/login');
     } catch (err) {
       console.error("Registration Error:", err);
-      const errorMessage = err.response?.data?.message || err.response?.data || "Registration failed. Please try again.";
+      const errorMessage = err.response?.data?.message || err.response?.data || "Registration failed. Please try again later.";
       setError(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
     }
   };
