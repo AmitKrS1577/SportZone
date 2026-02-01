@@ -15,6 +15,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 
@@ -45,6 +46,7 @@ public class Court {
     @JoinColumn(name = "venue_id")
     @JsonIgnore
     @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Venue venue;
 
 }

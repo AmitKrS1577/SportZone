@@ -40,13 +40,22 @@ public class BookingController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Booking>> getAllBookings() {
-        return ResponseEntity.ok(bookingService.getAllBookings());
+    public ResponseEntity<Page<Booking>> getAllBookings(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "false") boolean upcoming) {
+        if (upcoming) {
+            return ResponseEntity.ok(bookingService.getUpcomingBookings(page, size));
+        }
+        return ResponseEntity.ok(bookingService.getAllBookings(page, size));
     }
 
     @GetMapping("/venue/{venueId}")
-    public ResponseEntity<List<Booking>> getBookingsByVenue(@PathVariable Long venueId) {
-        return ResponseEntity.ok(bookingService.getBookingsByVenue(venueId));
+    public ResponseEntity<Page<Booking>> getBookingsByVenue(
+            @PathVariable Long venueId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(bookingService.getBookingsByVenuePaginated(venueId, page, size));
     }
 
     @GetMapping("/court/{courtId}")

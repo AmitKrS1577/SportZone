@@ -1,4 +1,6 @@
 E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\aspect\LoggingAspect.java
+E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\config\SecurityConfig.java
+E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\config\WebConfig.java
 E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\controller\VenueController.java
 E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\entity\Court.java
 E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\entity\Venue.java
@@ -8,5 +10,9 @@ E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\exceptio
 E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\repository\CourtRepository.java
 E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\repository\VenueImageRepository.java
 E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\repository\VenueRepository.java
+E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\security\jwt\AuthEntryPointJwt.java
+E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\security\jwt\AuthTokenFilter.java
+E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\security\jwt\JwtUtils.java
+E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\service\FileStorageService.java
 E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\service\VenueService.java
 E:\CDAC\Project\backend\venue-service\src\main\java\com\sportzone\venue\VenueServiceApplication.java

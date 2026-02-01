@@ -6,6 +6,7 @@ import com.sportzone.venue.service.VenueService;
 import jakarta.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,7 +16,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -26,9 +29,36 @@ public class VenueController {
     @Autowired
     private VenueService venueService;
 
-    @PostMapping
-    public ResponseEntity<Venue> createVenue(@Valid @RequestBody Venue venue) {
-        return ResponseEntity.ok(venueService.createVenue(venue));
+    @PostMapping(consumes = { "multipart/form-data" })
+    public ResponseEntity<Venue> createVenue(
+            @RequestPart("venue") @Valid Venue venue,
+            @RequestPart(value = "images", required = false) List<MultipartFile> images) {
+        System.out.println("Received Create Venue Request");
+        if(images != null) {
+            System.out.println("Number of images: " + images.size());
+        } else {
+            System.out.println("No images received.");
+        }
+        Venue createdVenue = venueService.createVenue(venue);
+        if (images != null && !images.isEmpty()) {
+            for (MultipartFile file : images) {
+                venueService.addVenueImage(createdVenue.getId(), file);
+            }
+        }
+        return ResponseEntity.ok(venueService.getVenueById(createdVenue.getId()));
+    }
+
+    @PostMapping(value = "/{id}/images", consumes = { "multipart/form-data" })
+    public ResponseEntity<com.sportzone.venue.entity.VenueImage> uploadImage(
+            @PathVariable Long id,
+            @RequestParam("image") MultipartFile file) {
+        return ResponseEntity.ok(venueService.addVenueImage(id, file));
+    }
+
+    @DeleteMapping("/images/{imageId}")
+    public ResponseEntity<Void> deleteImage(@PathVariable Long imageId) {
+        venueService.deleteVenueImage(imageId);
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping
@@ -37,8 +67,11 @@ public class VenueController {
     }
 
     @GetMapping("/admin/all")
-    public ResponseEntity<List<Venue>> getAllVenuesForAdmin() {
-        return ResponseEntity.ok(venueService.getAllVenuesForAdmin());
+    public ResponseEntity<Page<Venue>> getAllVenuesForAdmin(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String search) {
+        return ResponseEntity.ok(venueService.getAllVenuesForAdmin(page, size, search));
     }
 
     @PutMapping("/{id}/approve")

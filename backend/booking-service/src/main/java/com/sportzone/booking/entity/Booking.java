@@ -17,7 +17,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 
 @Entity
 @Table(name = "bookings", uniqueConstraints = {
@@ -55,7 +55,7 @@ public class Booking {
     @Enumerated(EnumType.STRING)
     private BookingStatus status; // PENDING, CONFIRMED, CANCELLED
 
-    @Positive(message = "Amount must be positive")
+    @PositiveOrZero(message = "Amount must be positive or zero")
     private Double amount;
 
     @Column(updatable = false)

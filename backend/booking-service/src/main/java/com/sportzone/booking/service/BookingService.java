@@ -21,6 +21,24 @@ public class BookingService {
     @Autowired
     private BookingRepository bookingRepository;
 
+    private void validateBookingTiming(Booking booking) {
+        LocalDateTime start = booking.getStartTime();
+        LocalDateTime end = booking.getEndTime();
+        LocalDateTime now = LocalDateTime.now();
+
+        if (start.isBefore(now) && booking.getStatus() != BookingStatus.BLOCKED) {
+            throw new RuntimeException("Booking start time must be in the future.");
+        }
+
+        if (end.isBefore(start)) {
+            throw new RuntimeException("Booking end time must be after start time.");
+        }
+
+        if (start.getMinute() != 0 || end.getMinute() != 0) {
+            throw new RuntimeException("Booking timings must be in 1-hour blocks (e.g., 10:00, 11:00).");
+        }
+    }
+
     public Booking createBooking(Booking booking) {
         validateBookingTiming(booking);
 
@@ -43,12 +61,23 @@ public class BookingService {
         return bookingRepository.findByUserId(userId);
     }
 
-    public List<Booking> getAllBookings() {
-        return bookingRepository.findAll();
+    public Page<Booking> getAllBookings(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("startTime").descending());
+        return bookingRepository.findAll(pageable);
+    }
+
+    public Page<Booking> getUpcomingBookings(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("startTime").ascending());
+        return bookingRepository.findByStartTimeAfter(LocalDateTime.now(), pageable);
     }
 
     public List<Booking> getBookingsByVenue(Long venueId) {
         return bookingRepository.findByVenueId(venueId);
+    }
+
+    public Page<Booking> getBookingsByVenuePaginated(Long venueId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("startTime").descending());
+        return bookingRepository.findByVenueId(venueId, pageable);
     }
 
     public List<Booking> getBookingsByCourt(Long courtId) {
@@ -96,24 +125,6 @@ public class BookingService {
         return bookingRepository.save(booking);
     }
 
-    private void validateBookingTiming(Booking booking) {
-        LocalDateTime start = booking.getStartTime();
-        LocalDateTime end = booking.getEndTime();
-        LocalDateTime now = LocalDateTime.now();
-
-        if (start.isBefore(now)) {
-            throw new RuntimeException("Booking start time must be in the future.");
-        }
-
-        if (end.isBefore(start)) {
-            throw new RuntimeException("Booking end time must be after start time.");
-        }
-
-        if (start.getMinute() != 0 || end.getMinute() != 0) {
-            throw new RuntimeException("Booking timings must be in 1-hour blocks (e.g., 10:00, 11:00).");
-        }
-    }
-
     public void cancelBookingsByVenue(Long venueId) {
         List<Booking> bookings = bookingRepository.findByVenueId(venueId);
         for (Booking b : bookings) {
@@ -141,7 +152,6 @@ public class BookingService {
     public void updatePastBookings() {
         LocalDateTime now = LocalDateTime.now();
 
-        // 1. Mark CONFIRMED bookings as COMPLETED if time passed
         List<Booking> expiredBookings = bookingRepository.findByStatusAndEndTimeBefore(
                 BookingStatus.CONFIRMED, now);
 
@@ -150,7 +160,6 @@ public class BookingService {
             bookingRepository.save(booking);
         }
 
-        // 2. Cancel PENDING bookings older than 10 minutes
         LocalDateTime tenMinutesAgo = now.minusMinutes(10);
         List<Booking> staleBookings = bookingRepository.findByStatusAndCreatedAtBefore(
                 BookingStatus.PENDING, tenMinutesAgo);

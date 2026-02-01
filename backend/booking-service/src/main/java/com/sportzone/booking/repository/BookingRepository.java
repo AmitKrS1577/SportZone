@@ -31,7 +31,11 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
         List<Booking> findByVenueId(Long venueId);
 
+        Page<Booking> findByVenueId(Long venueId, Pageable pageable);
+
         List<Booking> findByCourtId(Long courtId);
 
         List<Booking> findByStatusAndCreatedAtBefore(BookingStatus status, LocalDateTime dateTime);
+
+        Page<Booking> findByStartTimeAfter(LocalDateTime time, Pageable pageable);
 }

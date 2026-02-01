@@ -2,6 +2,7 @@ package com.sportzone.venue.entity;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
@@ -54,11 +55,12 @@ public class Venue {
     private String status = "PENDING"; // APPROVED, PENDING, REJECTED
 
     @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "venue", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private List<VenueImage> images;
 
     @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "venue", cascade = CascadeType.ALL)
     private List<Court> courts;
-
 }
